@@ -5,13 +5,12 @@ import { useNavigate } from 'react-router-dom';
 const DomainManager = () => {
   const navigate = useNavigate();
   const [domains, setDomains] = useState([
-    { id: 1, domain: 'www.google.com', ip: '142.251.42.228' },
-    { id: 2, domain: 'www.facebook.com', ip: '157.240.199.35' }
+    { id: 1, domain: 'www.google.com' },
+    { id: 2, domain: 'www.facebook.com' }
   ]);
   
   const [searchTerm, setSearchTerm] = useState('');
   const [newDomain, setNewDomain] = useState('');
-  const [newIP, setNewIP] = useState('');
 
   const handleLogout = () => {
     // 這裡可以加入登出相關的邏輯，例如清除 token 等
@@ -19,17 +18,22 @@ const DomainManager = () => {
   };
 
   const handleAdd = () => {
-    if (newDomain && newIP) {
+    if (newDomain) {
       setDomains([
         ...domains,
         {
           id: domains.length + 1,
-          domain: newDomain,
-          ip: newIP
+          domain: newDomain
         }
       ]);
       setNewDomain('');
       setNewIP('');
+    }
+  };
+
+  const handleKeyPress = (event) => {
+    if(event.key === 'Enter'){
+      handleAdd();
     }
   };
 
@@ -38,8 +42,7 @@ const DomainManager = () => {
   };
 
   const filteredDomains = domains.filter(domain =>
-    domain.domain.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    domain.ip.includes(searchTerm)
+    domain.domain.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -77,14 +80,8 @@ const DomainManager = () => {
               placeholder="輸入域名"
               className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               value={newDomain}
+              onKeyDown={handleKeyPress}
               onChange={(e) => setNewDomain(e.target.value)}
-            />
-            <input
-              type="text"
-              placeholder="輸入 IP 位址"
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              value={newIP}
-              onChange={(e) => setNewIP(e.target.value)}
             />
             <button
               onClick={handleAdd}
@@ -104,9 +101,6 @@ const DomainManager = () => {
                     域名
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    IP 位址
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     操作
                   </th>
                 </tr>
@@ -115,7 +109,6 @@ const DomainManager = () => {
                 {filteredDomains.map((item) => (
                   <tr key={item.id}>
                     <td className="px-6 py-4 whitespace-nowrap">{item.domain}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">{item.ip}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <button
                         onClick={() => handleDelete(item.id)}
