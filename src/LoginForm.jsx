@@ -72,7 +72,7 @@ const LoginForm = () => {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="w-full max-w-md bg-white rounded-lg shadow-lg p-8">
         <div className="text-center mb-8">
-          <h2 className="text-2xl font-bold">HKP WebViewer</h2>
+          <h2 className="text-2xl font-bold">HKP WebFilter</h2>
           <p className="text-sm text-gray-500 mt-1">請輸入您的帳號密碼</p>
         </div>
 
