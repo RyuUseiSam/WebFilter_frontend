@@ -1,19 +1,19 @@
-import React, { useState } from 'react';
-import { Lock, User } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from "react";
+import { Lock, User } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
-const API_BASE_URL = 'http://192.168.121.135:8000';
+const API_BASE_URL = "http://192.168.121.135:8000";
 
 const LoginForm = () => {
   const navigate = useNavigate();
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const makeRequest = async (endpoint, method, body = null) => {
     const headers = {
-      'Content-Type': 'application/json'
+      "Content-Type": "application/json",
     };
 
     const options = {
@@ -33,36 +33,36 @@ const LoginForm = () => {
       return {
         code: 500,
         msg: `Error: ${error.message}`,
-        data: null
+        data: null,
       };
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!username || !password) {
-      setError('請輸入帳號和密碼');
+      setError("請輸入帳號和密碼");
       return;
     }
 
     setLoading(true);
-    setError('');
+    setError("");
 
     try {
-      const response = await makeRequest('/login', 'POST', {
+      const response = await makeRequest("/login", "POST", {
         username,
-        password
+        password,
       });
 
       if (response.code === 200) {
-        localStorage.setItem('token', response.data.token);
-        navigate('/dashboard');
+        localStorage.setItem("token", response.data.token);
+        navigate("/dashboard");
       } else {
-        setError(response.msg || '登入失敗');
+        setError(response.msg || "登入失敗");
       }
     } catch (error) {
-      setError('登入時發生錯誤');
+      setError("登入時發生錯誤");
     } finally {
       setLoading(false);
     }
@@ -72,10 +72,8 @@ const LoginForm = () => {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="w-full max-w-md bg-white rounded-lg shadow-lg p-8">
         <div className="text-center mb-8">
-          <h2 className="text-2xl font-bold">HKP Domain2IP</h2>
-          <p className="text-sm text-gray-500 mt-1">
-            請輸入您的帳號密碼
-          </p>
+          <h2 className="text-2xl font-bold">HKP WebViewer</h2>
+          <p className="text-sm text-gray-500 mt-1">請輸入您的帳號密碼</p>
         </div>
 
         {error && (
@@ -86,7 +84,10 @@ const LoginForm = () => {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
-            <label htmlFor="username" className="block text-sm font-medium text-gray-700">
+            <label
+              htmlFor="username"
+              className="block text-sm font-medium text-gray-700"
+            >
               帳號
             </label>
             <div className="relative">
@@ -102,9 +103,12 @@ const LoginForm = () => {
               />
             </div>
           </div>
-          
+
           <div className="space-y-2">
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+            <label
+              htmlFor="password"
+              className="block text-sm font-medium text-gray-700"
+            >
               密碼
             </label>
             <div className="relative">
@@ -126,7 +130,7 @@ const LoginForm = () => {
             className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-blue-300 disabled:cursor-not-allowed"
             disabled={loading}
           >
-            {loading ? '登入中...' : '登入'}
+            {loading ? "登入中..." : "登入"}
           </button>
         </form>
       </div>
