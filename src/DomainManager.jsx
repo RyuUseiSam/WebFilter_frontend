@@ -3,6 +3,7 @@ import { LogOut, User, Settings } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ModeSwitch from "./components/ModeSwitch";
 import DisplayView from "./components/DisplayView";
+import ConfirmModal from "./components/ConfirmModal";
 
 const API_BASE_URL = "http://192.168.121.135:8000";
 
@@ -14,6 +15,7 @@ const DomainManager = () => {
   const [newDomain, setNewDomain] = useState("");
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const makeRequest = async (endpoint, method, body = null) => {
     const token = localStorage.getItem("token");
@@ -78,9 +80,18 @@ const DomainManager = () => {
     // loadDomains();
   }, []);
 
-  const handleLogout = () => {
+  const handleLogoutClick = () => {
+    setShowLogoutModal(true);
+  };
+
+  const handleLogoutConfirm = () => {
     localStorage.removeItem("token");
+    setShowLogoutModal(false);
     navigate("/login");
+  };
+
+  const handleLogoutCancel = () => {
+    setShowLogoutModal(false);
   };
 
   const handleAdd = async () => {
@@ -146,7 +157,7 @@ const DomainManager = () => {
                 <span className="text-sm text-gray-700 font-medium">管理員</span>
               </div>
               <button
-                onClick={handleLogout}
+                onClick={handleLogoutClick}
                 className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200 font-medium border border-transparent hover:border-red-200"
               >
                 <LogOut className="w-5 h-5" />
@@ -175,6 +186,17 @@ const DomainManager = () => {
         {/* Display View Component */}
         <DisplayView mode={mode} />
       </main>
+
+      {/* Logout Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showLogoutModal}
+        onClose={handleLogoutCancel}
+        onConfirm={handleLogoutConfirm}
+        title="確認登出"
+        message="確定要登出系統嗎？登出後需要重新登入才能繼續使用。"
+        confirmText="確認登出"
+        cancelText="取消"
+      />
     </div>
   );
 };
