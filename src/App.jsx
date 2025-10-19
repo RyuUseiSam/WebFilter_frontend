@@ -7,7 +7,9 @@ const App = () => {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<LoginForm />} />
+        {/* TEMPORARY: Dashboard as default route for development */}
+        <Route path="/" element={<DomainManager />} />
+        <Route path="/login" element={<LoginForm />} />
         <Route path="/dashboard" element={<DomainManager />} />
       </Routes>
     </BrowserRouter>

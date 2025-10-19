@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from "react";
-import { Search, Plus, Trash2, LogOut } from "lucide-react";
+import { LogOut, User, Settings } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import ModeSwitch from "./components/ModeSwitch";
+import DisplayView from "./components/DisplayView";
 
 const API_BASE_URL = "http://192.168.121.135:8000";
 
 const DomainManager = () => {
   const navigate = useNavigate();
-  const [domains, setDomains] = useState([]); 
+  const [mode, setMode] = useState("whitelist"); // whitelist or blacklist
+  const [domains, setDomains] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [newDomain, setNewDomain] = useState("");
   const [error, setError] = useState(null);
@@ -71,12 +74,13 @@ const DomainManager = () => {
   };
 
   useEffect(() => {
-    loadDomains();
+    // TEMPORARY: Skip auto-load for development without auth
+    // loadDomains();
   }, []);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
-    navigate("/");
+    navigate("/login");
   };
 
   const handleAdd = async () => {
@@ -112,96 +116,65 @@ const DomainManager = () => {
     item.domain.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const handleModeChange = (newMode) => {
+    setMode(newMode);
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="bg-white rounded-lg shadow-lg p-6">
-          {/* Header */}
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-bold">Domain2IP 管理系統</h1>
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-2 px-4 py-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors"
-            >
-              <LogOut size={20} />
-              登出
-            </button>
-          </div>
-
-          {/* Error Message */}
-          {error && (
-            <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-md">
-              {error}
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      {/* Top Navigation Bar */}
+      <nav className="bg-white/80 backdrop-blur-lg border-b border-gray-200 sticky top-0 z-50 shadow-sm animate-fadeIn">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            {/* Logo & Title */}
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center shadow-lg">
+                <Settings className="w-6 h-6 text-white animate-spin" style={{ animationDuration: '3s' }} />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                  HKP WebFilter
+                </h1>
+                <p className="text-xs text-gray-500">域名過濾管理系統</p>
+              </div>
             </div>
-          )}
 
-          {/* Search Bar */}
-          <div className="mb-6 relative">
-            <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="搜尋域名..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-
-          {/* Add New Entry */}
-          <div className="mb-6 flex gap-4">
-            <input
-              type="text"
-              placeholder="輸入域名"
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              value={newDomain}
-              onKeyDown={handleKeyPress}
-              onChange={(e) => setNewDomain(e.target.value)}
-            />
-            <button
-              onClick={handleAdd}
-              disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-blue-300 disabled:cursor-not-allowed"
-            >
-              <Plus size={20} />
-              {loading ? "處理中..." : "新增"}
-            </button>
-          </div>
-
-          {/* Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    域名
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    操作
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredDomains.map((item) => (
-                  <tr key={item.id}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {item.domain}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <button
-                        onClick={() => handleDelete(item.domain)} // 修改為傳遞 domain 字串
-                        disabled={loading}
-                        className="text-red-600 hover:text-red-900 disabled:text-red-300 disabled:cursor-not-allowed"
-                      >
-                        <Trash2 size={20} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {/* User Actions */}
+            <div className="flex items-center gap-4">
+              <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg">
+                <User className="w-4 h-4 text-gray-600" />
+                <span className="text-sm text-gray-700 font-medium">管理員</span>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200 font-medium border border-transparent hover:border-red-200"
+              >
+                <LogOut className="w-5 h-5" />
+                <span className="hidden sm:inline">登出</span>
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      </nav>
+
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-start gap-3 animate-shake shadow-lg">
+            <div className="flex-shrink-0 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center">
+              <span className="text-white text-xs font-bold">!</span>
+            </div>
+            <span className="flex-1">{error}</span>
+          </div>
+        )}
+
+        {/* Mode Switcher Component */}
+        <ModeSwitch mode={mode} onModeChange={handleModeChange} />
+
+        {/* Display View Component */}
+        <DisplayView mode={mode} />
+      </main>
     </div>
   );
 };
