@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Plus, X, Trash2, Edit, Calendar, Clock, XCircle, CheckCircle } from 'lucide-react';
+import { Search, Plus, X, Trash2, Edit, Calendar, Clock, XCircle, CheckCircle, Power } from 'lucide-react';
 import TimeSlotPicker from './TimeSlotPicker';
 
 // Mock data for demonstration
@@ -10,7 +10,8 @@ const mockBlackListData = [
     isScheduled: true,
     scheduleTimeSlots: [
       { start: '09:00', end: '17:00', weekdays: [1, 2, 3, 4, 5] }
-    ]
+    ],
+    isEnabled: true
   },
   {
     id: 2,
@@ -19,13 +20,15 @@ const mockBlackListData = [
     scheduleTimeSlots: [
       { start: '09:00', end: '12:00', weekdays: [1, 2, 3, 4, 5] },
       { start: '13:00', end: '18:00', weekdays: [1, 2, 3, 4, 5] }
-    ]
+    ],
+    isEnabled: false
   },
   {
     id: 3,
     url: 'https://www.instagram.com',
     isScheduled: false,
-    scheduleTimeSlots: []
+    scheduleTimeSlots: [],
+    isEnabled: true
   },
   {
     id: 4,
@@ -33,7 +36,8 @@ const mockBlackListData = [
     isScheduled: true,
     scheduleTimeSlots: [
       { start: '00:00', end: '23:59', weekdays: [0, 1, 2, 3, 4, 5, 6] }
-    ]
+    ],
+    isEnabled: true
   },
   {
     id: 5,
@@ -41,7 +45,8 @@ const mockBlackListData = [
     isScheduled: true,
     scheduleTimeSlots: [
       { start: '09:00', end: '17:00', weekdays: [1, 2, 3, 4, 5] }
-    ]
+    ],
+    isEnabled: true
   }
 ];
 
@@ -92,7 +97,8 @@ const BlackListView = () => {
         id: records.length + 1,
         url: newUrl.trim(),
         isScheduled: isScheduled,
-        scheduleTimeSlots: isScheduled ? timeSlots : []
+        scheduleTimeSlots: isScheduled ? timeSlots : [],
+        isEnabled: true
       };
       setRecords([...records, newRecord]);
       setNewUrl('');
@@ -104,6 +110,12 @@ const BlackListView = () => {
 
   const handleDelete = (id) => {
     setRecords(records.filter(record => record.id !== id));
+  };
+
+  const handleToggleEnable = (id) => {
+    setRecords(records.map(record =>
+      record.id === id ? { ...record, isEnabled: !record.isEnabled } : record
+    ));
   };
 
   return (
@@ -128,6 +140,7 @@ const BlackListView = () => {
 
           {/* Create Button */}
           <button
+            type="button"
             onClick={handleCreateToggle}
             className={`flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold
               transition-all duration-300 transform hover:scale-105 active:scale-95 shadow-md
@@ -152,11 +165,8 @@ const BlackListView = () => {
         </div>
 
         {/* Expandable Create Form */}
-        <div
-          className={`overflow-visible transition-all duration-300 ease-in-out ${
-            isCreating ? 'max-h-[1200px] mt-6 opacity-100' : 'max-h-0 opacity-0'
-          }`}
-        >
+        {isCreating && (
+          <div className="mt-6 animate-fadeIn">
           <form onSubmit={handleSubmit} className="space-y-4 pt-4 border-t border-gray-200">
             {/* URL Input */}
             <div className="space-y-2">
@@ -218,7 +228,8 @@ const BlackListView = () => {
               確認新增
             </button>
           </form>
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Table Display */}
@@ -253,6 +264,9 @@ const BlackListView = () => {
                     網址 (URL)
                   </th>
                   <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    狀態
+                  </th>
+                  <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     排程狀態
                   </th>
                   <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
@@ -267,17 +281,38 @@ const BlackListView = () => {
                 {filteredRecords.map((record, index) => (
                   <tr
                     key={record.id}
-                    className="hover:bg-red-50 transition-colors duration-150 animate-fadeIn"
+                    className={`hover:bg-red-50 transition-all duration-150 animate-fadeIn ${
+                      !record.isEnabled ? 'opacity-50 bg-gray-50' : ''
+                    }`}
                     style={{ animationDelay: `${index * 0.05}s` }}
                   >
                     {/* URL */}
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse-slow" />
-                        <span className="text-sm text-gray-900 font-medium break-all">
+                        <div className={`w-2 h-2 rounded-full ${
+                          record.isEnabled ? 'bg-red-500 animate-pulse-slow' : 'bg-gray-400'
+                        }`} />
+                        <span className={`text-sm font-medium break-all ${
+                          record.isEnabled ? 'text-gray-900' : 'text-gray-500 line-through'
+                        }`}>
                           {record.url}
                         </span>
                       </div>
+                    </td>
+
+                    {/* Enable/Disable Status */}
+                    <td className="px-6 py-4 text-center">
+                      {record.isEnabled ? (
+                        <span className="inline-flex items-center gap-1 px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs font-semibold">
+                          <CheckCircle className="w-3 h-3" />
+                          啟用
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-3 py-1 bg-gray-200 text-gray-600 rounded-full text-xs font-semibold">
+                          <XCircle className="w-3 h-3" />
+                          停用
+                        </span>
+                      )}
                     </td>
 
                     {/* Is Scheduled */}
@@ -326,12 +361,26 @@ const BlackListView = () => {
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-center gap-2">
                         <button
+                          type="button"
+                          onClick={() => handleToggleEnable(record.id)}
+                          className={`p-2 rounded-lg transition-all duration-200 ${
+                            record.isEnabled
+                              ? 'text-red-600 hover:bg-red-50'
+                              : 'text-gray-500 hover:bg-gray-100'
+                          }`}
+                          title={record.isEnabled ? '停用' : '啟用'}
+                        >
+                          <Power className="w-5 h-5" />
+                        </button>
+                        <button
+                          type="button"
                           className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors duration-200"
                           title="編輯"
                         >
                           <Edit className="w-5 h-5" />
                         </button>
                         <button
+                          type="button"
                           onClick={() => handleDelete(record.id)}
                           className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
                           title="刪除"

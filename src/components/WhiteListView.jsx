@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Plus, X, Trash2, Edit, Calendar, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Search, Plus, X, Trash2, Edit, Calendar, Clock, CheckCircle, XCircle, Power } from 'lucide-react';
 import TimeSlotPicker from './TimeSlotPicker';
 
 // Mock data for demonstration
@@ -8,7 +8,8 @@ const mockWhiteListData = [
     id: 1,
     url: 'https://www.google.com',
     isScheduled: false,
-    scheduleTimeSlots: []
+    scheduleTimeSlots: [],
+    isEnabled: true
   },
   {
     id: 2,
@@ -17,7 +18,8 @@ const mockWhiteListData = [
     scheduleTimeSlots: [
       { start: '09:00', end: '12:00', weekdays: [1, 2, 3, 4, 5] },
       { start: '13:00', end: '18:00', weekdays: [1, 2, 3, 4, 5] }
-    ]
+    ],
+    isEnabled: true
   },
   {
     id: 3,
@@ -25,13 +27,15 @@ const mockWhiteListData = [
     isScheduled: true,
     scheduleTimeSlots: [
       { start: '08:00', end: '17:00', weekdays: [1, 2, 3, 4, 5] }
-    ]
+    ],
+    isEnabled: false
   },
   {
     id: 4,
     url: 'https://developer.mozilla.org',
     isScheduled: false,
-    scheduleTimeSlots: []
+    scheduleTimeSlots: [],
+    isEnabled: true
   },
   {
     id: 5,
@@ -41,7 +45,8 @@ const mockWhiteListData = [
       { start: '12:00', end: '13:00', weekdays: [1, 2, 3, 4, 5] },
       { start: '18:00', end: '20:00', weekdays: [6, 0] },
       { start: '21:00', end: '22:00', weekdays: [0] }
-    ]
+    ],
+    isEnabled: true
   },
   {
     id: 6,
@@ -49,7 +54,8 @@ const mockWhiteListData = [
     isScheduled: true,
     scheduleTimeSlots: [
       { start: '00:00', end: '23:59', weekdays: [0, 1, 2, 3, 4, 5, 6] }
-    ]
+    ],
+    isEnabled: true
   }
 ];
 
@@ -100,7 +106,8 @@ const WhiteListView = () => {
         id: records.length + 1,
         url: newUrl.trim(),
         isScheduled: isScheduled,
-        scheduleTimeSlots: isScheduled ? timeSlots : []
+        scheduleTimeSlots: isScheduled ? timeSlots : [],
+        isEnabled: true
       };
       setRecords([...records, newRecord]);
       setNewUrl('');
@@ -112,6 +119,12 @@ const WhiteListView = () => {
 
   const handleDelete = (id) => {
     setRecords(records.filter(record => record.id !== id));
+  };
+
+  const handleToggleEnable = (id) => {
+    setRecords(records.map(record =>
+      record.id === id ? { ...record, isEnabled: !record.isEnabled } : record
+    ));
   };
 
   return (
@@ -136,6 +149,7 @@ const WhiteListView = () => {
 
           {/* Create Button */}
           <button
+            type="button"
             onClick={handleCreateToggle}
             className={`flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold
               transition-all duration-300 transform hover:scale-105 active:scale-95 shadow-md
@@ -160,11 +174,8 @@ const WhiteListView = () => {
         </div>
 
         {/* Expandable Create Form */}
-        <div
-          className={`overflow-visible transition-all duration-300 ease-in-out ${
-            isCreating ? 'max-h-[1200px] mt-6 opacity-100' : 'max-h-0 opacity-0'
-          }`}
-        >
+        {isCreating && (
+          <div className="mt-6 animate-fadeIn">
           <form onSubmit={handleSubmit} className="space-y-4 pt-4 border-t border-gray-200">
             {/* URL Input */}
             <div className="space-y-2">
@@ -226,7 +237,8 @@ const WhiteListView = () => {
               確認新增
             </button>
           </form>
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Table Display */}
@@ -261,6 +273,9 @@ const WhiteListView = () => {
                     網址 (URL)
                   </th>
                   <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    狀態
+                  </th>
+                  <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     排程狀態
                   </th>
                   <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
@@ -275,17 +290,38 @@ const WhiteListView = () => {
                 {filteredRecords.map((record, index) => (
                   <tr
                     key={record.id}
-                    className="hover:bg-green-50 transition-colors duration-150 animate-fadeIn"
+                    className={`hover:bg-green-50 transition-all duration-150 animate-fadeIn ${
+                      !record.isEnabled ? 'opacity-50 bg-gray-50' : ''
+                    }`}
                     style={{ animationDelay: `${index * 0.05}s` }}
                   >
                     {/* URL */}
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse-slow" />
-                        <span className="text-sm text-gray-900 font-medium break-all">
+                        <div className={`w-2 h-2 rounded-full ${
+                          record.isEnabled ? 'bg-green-500 animate-pulse-slow' : 'bg-gray-400'
+                        }`} />
+                        <span className={`text-sm font-medium break-all ${
+                          record.isEnabled ? 'text-gray-900' : 'text-gray-500 line-through'
+                        }`}>
                           {record.url}
                         </span>
                       </div>
+                    </td>
+
+                    {/* Enable/Disable Status */}
+                    <td className="px-6 py-4 text-center">
+                      {record.isEnabled ? (
+                        <span className="inline-flex items-center gap-1 px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">
+                          <CheckCircle className="w-3 h-3" />
+                          啟用
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-3 py-1 bg-gray-200 text-gray-600 rounded-full text-xs font-semibold">
+                          <XCircle className="w-3 h-3" />
+                          停用
+                        </span>
+                      )}
                     </td>
 
                     {/* Is Scheduled */}
@@ -334,12 +370,26 @@ const WhiteListView = () => {
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-center gap-2">
                         <button
+                          type="button"
+                          onClick={() => handleToggleEnable(record.id)}
+                          className={`p-2 rounded-lg transition-all duration-200 ${
+                            record.isEnabled
+                              ? 'text-green-600 hover:bg-green-50'
+                              : 'text-gray-500 hover:bg-gray-100'
+                          }`}
+                          title={record.isEnabled ? '停用' : '啟用'}
+                        >
+                          <Power className="w-5 h-5" />
+                        </button>
+                        <button
+                          type="button"
                           className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors duration-200"
                           title="編輯"
                         >
                           <Edit className="w-5 h-5" />
                         </button>
                         <button
+                          type="button"
                           onClick={() => handleDelete(record.id)}
                           className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
                           title="刪除"

@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Lock, User, Eye, EyeOff, AlertCircle, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import NetworkBackground from "./components/NetworkBackground";
 
-const API_BASE_URL = "http://192.168.121.135:8000";
+const API_BASE_URL = "http://127.0.0.1:5125";
+const SSO_LOGIN_URL = "https://login.mohkp.org/?jmp=I7rNQrfINCWj0qZlzqdcBdLkoaRhvvpoj3fmy8UZ6E7Vx5JT";
 
 const LoginForm = () => {
   const navigate = useNavigate();
@@ -13,6 +14,16 @@ const LoginForm = () => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [shake, setShake] = useState(false);
+  const [authPayload, setAuthPayload] = useState(null);
+  const loginPopupRef = useRef(null);
+
+  // Redirect to dashboard if already logged in
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [navigate]);
 
   const makeRequest = async (endpoint, method, body = null) => {
     const headers = {
@@ -50,6 +61,90 @@ const LoginForm = () => {
     }
   }, [error]);
 
+  // Listen for SSO login postMessage
+  useEffect(() => {
+    const handleMessage = (event) => {
+      // Log the message for debugging
+      console.log('Received message:', event.data);
+
+      if (event.data.type === 'HKP_SSO_LOGIN_SUCCESS') {
+        const { auth_payload, app_id } = event.data;
+
+        // Store the auth_payload
+        setAuthPayload(auth_payload);
+
+        // Close popup if still open
+        if (loginPopupRef.current && !loginPopupRef.current.closed) {
+          loginPopupRef.current.close();
+        }
+
+        console.log('SSO Authentication successful!');
+        console.log('Auth Payload:', auth_payload);
+        console.log('App ID:', app_id);
+
+        // Clear any errors
+        setError("");
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      if (loginPopupRef.current && !loginPopupRef.current.closed) {
+        loginPopupRef.current.close();
+      }
+    };
+  }, []);
+
+  // Handle SSO login when authPayload is received
+  useEffect(() => {
+    if (authPayload) {
+      console.log('Auth payload stored:', authPayload);
+      handleSSOLoginSubmit(authPayload);
+    }
+  }, [authPayload]);
+
+  const handleSSOLoginSubmit = async (auth_payload) => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const response = await makeRequest("/sso-login", "POST", {
+        auth_payload,
+      });
+
+      if (response.code === 200) {
+        // Store token and user info
+        localStorage.setItem("token", response.data.token);
+
+        // Optionally store user info
+        if (response.data.user_info) {
+          localStorage.setItem("user_info", JSON.stringify(response.data.user_info));
+        }
+
+        // Navigate to dashboard
+        navigate("/dashboard");
+      } else {
+        // Translate error messages to Chinese
+        let errorMsg = response.msg || "SSO登入失敗";
+        if (errorMsg.toLowerCase().includes("access denied") || errorMsg.includes("Only teachers")) {
+          errorMsg = "權限不足：只有教師可以存取此系統";
+        } else if (errorMsg.toLowerCase().includes("sso authentication failed")) {
+          errorMsg = "SSO驗證失敗，請重試";
+        } else if (errorMsg.toLowerCase().includes("failed to connect")) {
+          errorMsg = "無法連接到SSO服務";
+        }
+        setError(errorMsg);
+      }
+    } catch (error) {
+      setError("SSO登入時發生錯誤");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -62,7 +157,7 @@ const LoginForm = () => {
     setError("");
 
     try {
-      const response = await makeRequest("/login", "POST", {
+      const response = await makeRequest("/local-login", "POST", {
         username,
         password,
       });
@@ -71,7 +166,12 @@ const LoginForm = () => {
         localStorage.setItem("token", response.data.token);
         navigate("/dashboard");
       } else {
-        setError(response.msg || "登入失敗");
+        // Translate common English error messages to Chinese
+        let errorMsg = response.msg || "登入失敗";
+        if (errorMsg.toLowerCase().includes("invalid credentials")) {
+          errorMsg = "帳號或密碼錯誤";
+        }
+        setError(errorMsg);
       }
     } catch (error) {
       setError("登入時發生錯誤");
@@ -82,6 +182,27 @@ const LoginForm = () => {
 
   const togglePasswordVisibility = () => {
     setShowPassword(!showPassword);
+  };
+
+  const handleSSOLogin = () => {
+    const width = 500;
+    const height = 700;
+    const left = (window.screen.width - width) / 2;
+    const top = (window.screen.height - height) / 2;
+
+    loginPopupRef.current = window.open(
+      SSO_LOGIN_URL,
+      'HKP_SSO_Login',
+      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+    );
+
+    if (!loginPopupRef.current) {
+      setError('彈出視窗被阻擋！請允許此網站的彈出視窗。');
+      return;
+    }
+
+    // Clear any previous errors
+    setError("");
   };
 
   return (
@@ -111,8 +232,31 @@ const LoginForm = () => {
             </div>
           )}
 
+          {/* SSO Login Button */}
+          <button
+            type="button"
+            onClick={handleSSOLogin}
+            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3 sm:py-3.5 px-4 rounded-lg font-semibold text-sm sm:text-base
+              hover:from-blue-700 hover:to-indigo-700
+              focus:outline-none focus:ring-4 focus:ring-blue-300 focus:ring-offset-2
+              transform transition-all duration-200
+              hover:scale-[1.02] active:scale-[0.98]
+              shadow-lg hover:shadow-xl
+              flex items-center justify-center gap-2"
+          >
+            <Lock className="h-5 w-5" />
+            <span>濠江英才單點(SSO)登錄</span>
+          </button>
+
+          {/* Divider */}
+          <div className="mt-6 flex items-center gap-3">
+            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent"></div>
+            <span className="text-xs sm:text-sm text-gray-500 font-medium">或</span>
+            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent"></div>
+          </div>
+
           {/* Login Form */}
-          <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6 mt-6">
             {/* Username Input */}
             <div className="space-y-2">
               <label

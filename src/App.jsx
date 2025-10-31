@@ -1,16 +1,25 @@
 // App.jsx
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LoginForm from './LoginForm';
 import DomainManager from './DomainManager';
+import ProtectedRoute from './components/ProtectedRoute';
 
 const App = () => {
   return (
     <BrowserRouter>
       <Routes>
-        {/* TEMPORARY: Dashboard as default route for development */}
-        <Route path="/" element={<DomainManager />} />
+        {/* Redirect root to login */}
+        <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<LoginForm />} />
-        <Route path="/dashboard" element={<DomainManager />} />
+        {/* Protected dashboard route */}
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <DomainManager />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </BrowserRouter>
   );

@@ -1,83 +1,111 @@
 import React, { useEffect, useState } from "react";
-import { LogOut, User, Settings } from "lucide-react";
+import { LogOut, User, Settings, Activity } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ModeSwitch from "./components/ModeSwitch";
+import Dashboard from "./components/Dashboard";
 import DisplayView from "./components/DisplayView";
 import ConfirmModal from "./components/ConfirmModal";
+import Toast from "./components/Toast";
 
-const API_BASE_URL = "http://192.168.121.135:8000";
+// Mock data for dashboard demonstration
+const mockWhiteListRules = [
+  {
+    id: 1,
+    url: 'https://www.google.com',
+    isScheduled: false,
+    scheduleTimeSlots: [],
+    isEnabled: true
+  },
+  {
+    id: 2,
+    url: 'https://github.com',
+    isScheduled: true,
+    scheduleTimeSlots: [
+      { start: '09:00', end: '12:00', weekdays: [1, 2, 3, 4, 5] },
+      { start: '13:00', end: '18:00', weekdays: [1, 2, 3, 4, 5] }
+    ],
+    isEnabled: true
+  },
+  {
+    id: 3,
+    url: 'https://stackoverflow.com',
+    isScheduled: true,
+    scheduleTimeSlots: [
+      { start: '08:00', end: '17:00', weekdays: [1, 2, 3, 4, 5] }
+    ],
+    isEnabled: false
+  },
+  {
+    id: 4,
+    url: 'https://developer.mozilla.org',
+    isScheduled: false,
+    scheduleTimeSlots: [],
+    isEnabled: true
+  }
+];
+
+const mockBlackListRules = [
+  {
+    id: 1,
+    url: 'https://www.facebook.com',
+    isScheduled: true,
+    scheduleTimeSlots: [
+      { start: '09:00', end: '17:00', weekdays: [1, 2, 3, 4, 5] }
+    ],
+    isEnabled: true
+  },
+  {
+    id: 2,
+    url: 'https://twitter.com',
+    isScheduled: true,
+    scheduleTimeSlots: [
+      { start: '09:00', end: '12:00', weekdays: [1, 2, 3, 4, 5] },
+      { start: '13:00', end: '18:00', weekdays: [1, 2, 3, 4, 5] }
+    ],
+    isEnabled: false
+  },
+  {
+    id: 3,
+    url: 'https://www.instagram.com',
+    isScheduled: false,
+    scheduleTimeSlots: [],
+    isEnabled: true
+  },
+  {
+    id: 4,
+    url: 'https://www.tiktok.com',
+    isScheduled: true,
+    scheduleTimeSlots: [
+      { start: '00:00', end: '23:59', weekdays: [0, 1, 2, 3, 4, 5, 6] }
+    ],
+    isEnabled: true
+  }
+];
 
 const DomainManager = () => {
   const navigate = useNavigate();
   const [mode, setMode] = useState("whitelist"); // whitelist or blacklist
-  const [domains, setDomains] = useState([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [newDomain, setNewDomain] = useState("");
-  const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [teacherName, setTeacherName] = useState("管理員"); // Default to "管理員"
 
-  const makeRequest = async (endpoint, method, body = null) => {
-    const token = localStorage.getItem("token");
-    const headers = {
-      "Content-Type": "application/json",
-    };
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-
-    const options = {
-      method,
-      headers,
-    };
-
-    if (body) {
-      options.body = JSON.stringify(body);
-    }
-
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.msg || "Request failed");
-      }
-
-      return data;
-    } catch (error) {
-      setError(error.message);
-      return {
-        code: 500,
-        msg: error.message,
-        data: null,
-      };
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadDomains = async () => {
-    const response = await makeRequest("/display", "GET");
-    if (response.code === 200 && response.data && response.data.domains) {
-      // 將簡單的域名數組轉換為包含 id 的對象數組
-      const formattedDomains = response.data.domains.map((domain, index) => ({
-        id: index + 1,
-        domain: domain
-      }));
-      setDomains(formattedDomains);
-    } else {
-      setDomains([]);
-      if (response.code !== 200) {
-        setError(response.msg || "Failed to load domains");
-      }
-    }
-  };
-
+  // Load user info from localStorage on mount
   useEffect(() => {
-    // TEMPORARY: Skip auto-load for development without auth
-    // loadDomains();
+    const userInfoStr = localStorage.getItem("user_info");
+    if (userInfoStr) {
+      try {
+        const userInfo = JSON.parse(userInfoStr);
+        // If SSO login, display chinese_name + "老師"; otherwise keep default "管理員"
+        if (userInfo.chinese_name) {
+          setTeacherName(`${userInfo.chinese_name}老師`);
+        }
+      } catch (error) {
+        console.error("Failed to parse user_info:", error);
+        // Keep default "管理員" if parsing fails
+      }
+    }
+    // If no user_info in localStorage, it's a normal login - keep default "管理員"
   }, []);
 
   const handleLogoutClick = () => {
@@ -86,6 +114,7 @@ const DomainManager = () => {
 
   const handleLogoutConfirm = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("user_info"); // Clear SSO user info
     setShowLogoutModal(false);
     navigate("/login");
   };
@@ -94,41 +123,24 @@ const DomainManager = () => {
     setShowLogoutModal(false);
   };
 
-  const handleAdd = async () => {
-    if (!newDomain.trim()) return;
-
-    const response = await makeRequest("/add", "POST", {
-      domain: newDomain.trim(),
-    });
-
-    if (response.code === 200) {
-      await loadDomains();
-      setNewDomain("");
-    }
-  };
-
-  const handleKeyPress = (event) => {
-    if (event.key === "Enter") {
-      handleAdd();
-    }
-  };
-
-  const handleDelete = async (domain) => {
-    const response = await makeRequest("/delete", "DELETE", {
-      domain: domain // 修改為直接傳遞 domain 字串
-    });
-    
-    if (response.code === 200) {
-      await loadDomains();
-    }
-  };
-
-  const filteredDomains = domains.filter((item) =>
-    item.domain.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   const handleModeChange = (newMode) => {
     setMode(newMode);
+  };
+
+  const handleSaveMode = () => {
+    setIsSaving(true);
+    setToast(null);
+
+    // TODO: API integration for saving mode
+    // Simulate save operation
+    setTimeout(() => {
+      setIsSaving(false);
+      setToast({
+        message: `成功儲存${mode === 'whitelist' ? '白名單' : '黑名單'}模式！`,
+        type: 'success'
+      });
+    }, 500);
   };
 
   return (
@@ -154,9 +166,10 @@ const DomainManager = () => {
             <div className="flex items-center gap-4">
               <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg">
                 <User className="w-4 h-4 text-gray-600" />
-                <span className="text-sm text-gray-700 font-medium">管理員</span>
+                <span className="text-sm text-gray-700 font-medium">{teacherName}</span>
               </div>
               <button
+                type="button"
                 onClick={handleLogoutClick}
                 className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200 font-medium border border-transparent hover:border-red-200"
               >
@@ -170,21 +183,49 @@ const DomainManager = () => {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Error Message */}
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-start gap-3 animate-shake shadow-lg">
-            <div className="flex-shrink-0 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center">
-              <span className="text-white text-xs font-bold">!</span>
-            </div>
-            <span className="flex-1">{error}</span>
+        {/* Dashboard Information Section */}
+        <section className="mb-8 animate-fadeIn">
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent flex items-center gap-3">
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
+                <Activity className="w-5 h-5 text-white" />
+              </div>
+              儀表板
+            </h2>
+            <p className="text-gray-600 text-sm mt-2 ml-11">系統狀態與規則概覽</p>
           </div>
-        )}
 
-        {/* Mode Switcher Component */}
-        <ModeSwitch mode={mode} onModeChange={handleModeChange} />
+          {/* Dashboard Component */}
+          <Dashboard
+            mode={mode}
+            activeRules={(mode === 'whitelist' ? mockWhiteListRules : mockBlackListRules).filter(rule => rule.isEnabled)}
+            inactiveRules={(mode === 'whitelist' ? mockWhiteListRules : mockBlackListRules).filter(rule => !rule.isEnabled)}
+          />
+        </section>
 
-        {/* Display View Component */}
-        <DisplayView mode={mode} />
+        {/* Settings Section */}
+        <section className="animate-fadeIn" style={{ animationDelay: '0.2s' }}>
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent flex items-center gap-3">
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
+                <Settings className="w-5 h-5 text-white animate-spin" style={{ animationDuration: '3s' }} />
+              </div>
+              設定
+            </h2>
+            <p className="text-gray-600 text-sm mt-2 ml-11">管理過濾模式與規則</p>
+          </div>
+
+          {/* Mode Switcher Component */}
+          <ModeSwitch
+            mode={mode}
+            onModeChange={handleModeChange}
+            onSave={handleSaveMode}
+            isSaving={isSaving}
+          />
+
+          {/* Display View Component */}
+          <DisplayView mode={mode} />
+        </section>
       </main>
 
       {/* Logout Confirmation Modal */}
@@ -197,6 +238,15 @@ const DomainManager = () => {
         confirmText="確認登出"
         cancelText="取消"
       />
+
+      {/* Toast Notification */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 };
