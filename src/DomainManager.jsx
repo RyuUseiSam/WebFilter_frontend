@@ -7,88 +7,192 @@ import DisplayView from "./components/DisplayView";
 import ConfirmModal from "./components/ConfirmModal";
 import Toast from "./components/Toast";
 
-// Mock data for dashboard demonstration
-const mockWhiteListRules = [
-  {
-    id: 1,
-    url: 'https://www.google.com',
-    isScheduled: false,
-    scheduleTimeSlots: [],
-    isEnabled: true
-  },
-  {
-    id: 2,
-    url: 'https://github.com',
-    isScheduled: true,
-    scheduleTimeSlots: [
-      { start: '09:00', end: '12:00', weekdays: [1, 2, 3, 4, 5] },
-      { start: '13:00', end: '18:00', weekdays: [1, 2, 3, 4, 5] }
-    ],
-    isEnabled: true
-  },
-  {
-    id: 3,
-    url: 'https://stackoverflow.com',
-    isScheduled: true,
-    scheduleTimeSlots: [
-      { start: '08:00', end: '17:00', weekdays: [1, 2, 3, 4, 5] }
-    ],
-    isEnabled: false
-  },
-  {
-    id: 4,
-    url: 'https://developer.mozilla.org',
-    isScheduled: false,
-    scheduleTimeSlots: [],
-    isEnabled: true
-  }
-];
-
-const mockBlackListRules = [
-  {
-    id: 1,
-    url: 'https://www.facebook.com',
-    isScheduled: true,
-    scheduleTimeSlots: [
-      { start: '09:00', end: '17:00', weekdays: [1, 2, 3, 4, 5] }
-    ],
-    isEnabled: true
-  },
-  {
-    id: 2,
-    url: 'https://twitter.com',
-    isScheduled: true,
-    scheduleTimeSlots: [
-      { start: '09:00', end: '12:00', weekdays: [1, 2, 3, 4, 5] },
-      { start: '13:00', end: '18:00', weekdays: [1, 2, 3, 4, 5] }
-    ],
-    isEnabled: false
-  },
-  {
-    id: 3,
-    url: 'https://www.instagram.com',
-    isScheduled: false,
-    scheduleTimeSlots: [],
-    isEnabled: true
-  },
-  {
-    id: 4,
-    url: 'https://www.tiktok.com',
-    isScheduled: true,
-    scheduleTimeSlots: [
-      { start: '00:00', end: '23:59', weekdays: [0, 1, 2, 3, 4, 5, 6] }
-    ],
-    isEnabled: true
-  }
-];
+const API_BASE_URL = "http://192.168.121.52:5125";
 
 const DomainManager = () => {
   const navigate = useNavigate();
-  const [mode, setMode] = useState("whitelist"); // whitelist or blacklist
+  const [mode, setMode] = useState("whitelist"); // Current mode in the switch (not saved yet)
+  const [savedMode, setSavedMode] = useState("whitelist"); // Actually saved mode (for dashboard display)
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [toast, setToast] = useState(null);
   const [teacherName, setTeacherName] = useState("管理員"); // Default to "管理員"
+  const [roomName, setRoomName] = useState(""); // Room name from backend
+  const [records, setRecords] = useState([]);
+  const [dashboardStats, setDashboardStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Helper function to make API requests
+  const makeRequest = async (endpoint, options = {}) => {
+    const token = localStorage.getItem("token");
+    const headers = {
+      "Content-Type": "application/json",
+      ...(token && { Authorization: `Bearer ${token}` }),
+      ...options.headers,
+    };
+
+    try {
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        ...options,
+        headers,
+      });
+
+      const data = await response.json();
+
+      // Check for invalid token / session timeout
+      if (data.code === 401 || data.msg === "Invalid token") {
+        // Clear authentication data
+        localStorage.removeItem("token");
+        localStorage.removeItem("user_info");
+
+        // Show error toast
+        setToast({
+          message: "登入已過期，請重新登入",
+          type: "error",
+        });
+
+        // Redirect to login page after a short delay
+        setTimeout(() => {
+          navigate("/login");
+        }, 1500);
+
+        throw new Error("Session expired");
+      }
+
+      if (data.code !== 200) {
+        throw new Error(data.msg || "API request failed");
+      }
+
+      return data;
+    } catch (error) {
+      console.error(`API Error (${endpoint}):`, error);
+      throw error;
+    }
+  };
+
+  // Convert backend weeks (1-7 for Mon-Sun) to frontend weekdays (0-6 for Sun-Sat)
+  const convertWeeksToWeekdays = (weeks) => {
+    return weeks.map(week => week === 7 ? 0 : week);
+  };
+
+  // Convert frontend weekdays (0-6 for Sun-Sat) to backend weeks (1-7 for Mon-Sun)
+  const convertWeekdaysToWeeks = (weekdays) => {
+    return weekdays.map(day => day === 0 ? 7 : day);
+  };
+
+  // Convert backend domain record to frontend format
+  const convertBackendToFrontend = (backendRecord) => {
+    return {
+      id: backendRecord.id,
+      url: backendRecord.url,
+      domain: backendRecord.domain,
+      isScheduled: backendRecord.isScheduled,
+      scheduleTimeSlots: backendRecord.scheduleTimeSlots.map(slot => ({
+        start: slot.start,
+        end: slot.end,
+        weekdays: convertWeeksToWeekdays(slot.weeks),
+      })),
+      isEnabled: backendRecord.isActive,
+      type: backendRecord.type,
+    };
+  };
+
+  // Convert frontend domain record to backend format
+  const convertFrontendToBackend = (frontendRecord) => {
+    return {
+      domain: frontendRecord.domain || extractDomainFromUrl(frontendRecord.url),
+      url: frontendRecord.url,
+      type: frontendRecord.type,
+      isActive: frontendRecord.isEnabled !== undefined ? frontendRecord.isEnabled : true,
+      isScheduled: frontendRecord.isScheduled || false,
+      scheduleTimeSlots: (frontendRecord.scheduleTimeSlots || []).map(slot => ({
+        start: slot.start,
+        end: slot.end,
+        weeks: convertWeekdaysToWeeks(slot.weekdays),
+      })),
+    };
+  };
+
+  // Extract domain from URL
+  const extractDomainFromUrl = (url) => {
+    try {
+      const urlObj = new URL(url);
+      return urlObj.hostname;
+    } catch (error) {
+      return url;
+    }
+  };
+
+  // Fetch dashboard data
+  const fetchDashboard = async () => {
+    try {
+      const response = await makeRequest("/dashboard");
+      setDashboardStats(response.data);
+      return response.data;
+    } catch (error) {
+      setToast({
+        message: "無法載入儀表板數據",
+        type: "error",
+      });
+      return null;
+    }
+  };
+
+  // Fetch all domain records
+  const fetchRecords = async () => {
+    try {
+      const response = await makeRequest("/getRecord");
+      const convertedRecords = response.data.domains.map(convertBackendToFrontend);
+      setRecords(convertedRecords);
+      return convertedRecords;
+    } catch (error) {
+      setToast({
+        message: "無法載入域名記錄",
+        type: "error",
+      });
+      return [];
+    }
+  };
+
+  // Fetch room name
+  const fetchRoomName = async () => {
+    try {
+      const response = await makeRequest("/room");
+      if (response.data && response.data.room_name) {
+        setRoomName(response.data.room_name);
+      }
+    } catch (error) {
+      console.error("Failed to fetch room name:", error);
+      // Silently fail - room name is not critical
+    }
+  };
+
+  // Load initial data on mount
+  useEffect(() => {
+    const loadInitialData = async () => {
+      setLoading(true);
+      try {
+        // Fetch dashboard data to get current mode
+        const dashData = await fetchDashboard();
+        if (dashData && dashData.mode) {
+          setMode(dashData.mode);
+          setSavedMode(dashData.mode); // Set both mode and savedMode on initial load
+        }
+
+        // Fetch all records
+        await fetchRecords();
+
+        // Fetch room name
+        await fetchRoomName();
+      } catch (error) {
+        console.error("Failed to load initial data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadInitialData();
+  }, []);
 
   // Load user info from localStorage on mount
   useEffect(() => {
@@ -128,20 +232,168 @@ const DomainManager = () => {
     setMode(newMode);
   };
 
-  const handleSaveMode = () => {
+  const handleSaveMode = async () => {
     setIsSaving(true);
     setToast(null);
 
-    // TODO: API integration for saving mode
-    // Simulate save operation
-    setTimeout(() => {
-      setIsSaving(false);
+    try {
+      await makeRequest("/mode", {
+        method: "POST",
+        body: JSON.stringify({ mode }),
+      });
+
+      // Update saved mode to match current mode
+      setSavedMode(mode);
+
       setToast({
         message: `成功儲存${mode === 'whitelist' ? '白名單' : '黑名單'}模式！`,
         type: 'success'
       });
-    }, 500);
+
+      // Refresh dashboard stats and records after mode change
+      await fetchDashboard();
+      await fetchRecords();
+    } catch (error) {
+      setToast({
+        message: `儲存模式失敗：${error.message}`,
+        type: 'error'
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
+
+  // Add new domain record
+  const handleAddRecord = async (recordData) => {
+    try {
+      const backendData = convertFrontendToBackend(recordData);
+      const response = await makeRequest("/addRecord", {
+        method: "POST",
+        body: JSON.stringify(backendData),
+      });
+
+      const newRecord = convertBackendToFrontend(response.data.domain);
+      setRecords([...records, newRecord]);
+
+      setToast({
+        message: "成功新增域名記錄！",
+        type: "success",
+      });
+
+      // Refresh dashboard stats
+      await fetchDashboard();
+
+      return newRecord;
+    } catch (error) {
+      setToast({
+        message: `新增記錄失敗：${error.message}`,
+        type: "error",
+      });
+      throw error;
+    }
+  };
+
+  // Delete domain record
+  const handleDeleteRecord = async (id) => {
+    try {
+      await makeRequest("/deleteRecord", {
+        method: "POST",
+        body: JSON.stringify({ id }),
+      });
+
+      setRecords(records.filter(record => record.id !== id));
+
+      setToast({
+        message: "成功刪除域名記錄！",
+        type: "success",
+      });
+
+      // Refresh dashboard stats
+      await fetchDashboard();
+    } catch (error) {
+      setToast({
+        message: `刪除記錄失敗：${error.message}`,
+        type: "error",
+      });
+      throw error;
+    }
+  };
+
+  // Toggle record enabled status
+  const handleToggleRecord = async (id) => {
+    try {
+      const record = records.find(r => r.id === id);
+      if (!record) return;
+
+      const newStatus = !record.isEnabled;
+
+      await makeRequest("/updateRecordStatus", {
+        method: "POST",
+        body: JSON.stringify({
+          id,
+          isActive: newStatus,
+        }),
+      });
+
+      setRecords(records.map(r =>
+        r.id === id ? { ...r, isEnabled: newStatus } : r
+      ));
+
+      setToast({
+        message: `成功${newStatus ? '啟用' : '停用'}域名記錄！`,
+        type: "success",
+      });
+
+      // Refresh dashboard stats
+      await fetchDashboard();
+    } catch (error) {
+      setToast({
+        message: `更新記錄狀態失敗：${error.message}`,
+        type: "error",
+      });
+      throw error;
+    }
+  };
+
+  // Update record time slots
+  const handleUpdateTimeSlots = async (id, timeSlots, isActive) => {
+    try {
+      const backendTimeSlots = timeSlots.map(slot => ({
+        start: slot.start,
+        end: slot.end,
+        weeks: convertWeekdaysToWeeks(slot.weekdays),
+      }));
+
+      const response = await makeRequest("/updateRecordTimeSlot", {
+        method: "POST",
+        body: JSON.stringify({
+          id,
+          isActive,
+          scheduleTimeSlots: backendTimeSlots,
+        }),
+      });
+
+      const updatedRecord = convertBackendToFrontend(response.data.domain);
+      setRecords(records.map(r => r.id === id ? updatedRecord : r));
+
+      setToast({
+        message: "成功更新時間排程！",
+        type: "success",
+      });
+
+      return updatedRecord;
+    } catch (error) {
+      setToast({
+        message: `更新時間排程失敗：${error.message}`,
+        type: "error",
+      });
+      throw error;
+    }
+  };
+
+  // Filter records by type
+  const whiteListRecords = records.filter(r => r.type === 'white');
+  const blackListRecords = records.filter(r => r.type === 'black');
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
@@ -155,9 +407,16 @@ const DomainManager = () => {
                 <Settings className="w-6 h-6 text-white animate-spin" style={{ animationDuration: '3s' }} />
               </div>
               <div>
-                <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                  HKP WebFilter
-                </h1>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                    HKP WebFilter
+                  </h1>
+                  {roomName && (
+                    <span className="px-3 py-1 text-base font-bold bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg shadow-md">
+                      {roomName}室
+                    </span>
+                  )}
+                </div>
                 <p className="text-xs text-gray-500">域名過濾管理系統</p>
               </div>
             </div>
@@ -183,49 +442,68 @@ const DomainManager = () => {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Dashboard Information Section */}
-        <section className="mb-8 animate-fadeIn">
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent flex items-center gap-3">
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
-                <Activity className="w-5 h-5 text-white" />
-              </div>
-              儀表板
-            </h2>
-            <p className="text-gray-600 text-sm mt-2 ml-11">系統狀態與規則概覽</p>
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="text-center">
+              <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-gray-600">載入中...</p>
+            </div>
           </div>
-
-          {/* Dashboard Component */}
-          <Dashboard
-            mode={mode}
-            activeRules={(mode === 'whitelist' ? mockWhiteListRules : mockBlackListRules).filter(rule => rule.isEnabled)}
-            inactiveRules={(mode === 'whitelist' ? mockWhiteListRules : mockBlackListRules).filter(rule => !rule.isEnabled)}
-          />
-        </section>
-
-        {/* Settings Section */}
-        <section className="animate-fadeIn" style={{ animationDelay: '0.2s' }}>
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent flex items-center gap-3">
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
-                <Settings className="w-5 h-5 text-white animate-spin" style={{ animationDuration: '3s' }} />
+        ) : (
+          <>
+            {/* Dashboard Information Section */}
+            <section className="mb-8 animate-fadeIn">
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent flex items-center gap-3">
+                  <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
+                    <Activity className="w-5 h-5 text-white" />
+                  </div>
+                  儀表板
+                </h2>
+                <p className="text-gray-600 text-sm mt-2 ml-11">系統狀態與規則概覽</p>
               </div>
-              設定
-            </h2>
-            <p className="text-gray-600 text-sm mt-2 ml-11">管理過濾模式與規則</p>
-          </div>
 
-          {/* Mode Switcher Component */}
-          <ModeSwitch
-            mode={mode}
-            onModeChange={handleModeChange}
-            onSave={handleSaveMode}
-            isSaving={isSaving}
-          />
+              {/* Dashboard Component */}
+              <Dashboard
+                mode={savedMode}
+                activeRules={(savedMode === 'whitelist' ? whiteListRecords : blackListRecords).filter(rule => rule.isEnabled)}
+                inactiveRules={(savedMode === 'whitelist' ? whiteListRecords : blackListRecords).filter(rule => !rule.isEnabled)}
+              />
+            </section>
 
-          {/* Display View Component */}
-          <DisplayView mode={mode} />
-        </section>
+            {/* Settings Section */}
+            <section className="animate-fadeIn" style={{ animationDelay: '0.2s' }}>
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent flex items-center gap-3">
+                  <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
+                    <Settings className="w-5 h-5 text-white animate-spin" style={{ animationDuration: '3s' }} />
+                  </div>
+                  設定
+                </h2>
+                <p className="text-gray-600 text-sm mt-2 ml-11">管理過濾模式與規則</p>
+              </div>
+
+              {/* Mode Switcher Component */}
+              <ModeSwitch
+                mode={mode}
+                onModeChange={handleModeChange}
+                onSave={handleSaveMode}
+                isSaving={isSaving}
+              />
+
+              {/* Display View Component */}
+              <DisplayView
+                mode={mode}
+                whiteListRecords={whiteListRecords}
+                blackListRecords={blackListRecords}
+                onAddRecord={handleAddRecord}
+                onDeleteRecord={handleDeleteRecord}
+                onToggleRecord={handleToggleRecord}
+                onUpdateTimeSlots={handleUpdateTimeSlots}
+              />
+            </section>
+          </>
+        )}
       </main>
 
       {/* Logout Confirmation Modal */}

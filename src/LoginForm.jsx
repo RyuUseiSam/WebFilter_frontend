@@ -3,7 +3,7 @@ import { Lock, User, Eye, EyeOff, AlertCircle, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import NetworkBackground from "./components/NetworkBackground";
 
-const API_BASE_URL = "http://127.0.0.1:5125";
+const API_BASE_URL = "http://192.168.121.52:5125";
 const SSO_LOGIN_URL = "https://login.mohkp.org/?jmp=I7rNQrfINCWj0qZlzqdcBdLkoaRhvvpoj3fmy8UZ6E7Vx5JT";
 
 const LoginForm = () => {

@@ -1,63 +1,7 @@
 import React, { useState } from 'react';
 import { Search, Plus, X, Trash2, Edit, Calendar, Clock, CheckCircle, XCircle, Power } from 'lucide-react';
 import TimeSlotPicker from './TimeSlotPicker';
-
-// Mock data for demonstration
-const mockWhiteListData = [
-  {
-    id: 1,
-    url: 'https://www.google.com',
-    isScheduled: false,
-    scheduleTimeSlots: [],
-    isEnabled: true
-  },
-  {
-    id: 2,
-    url: 'https://github.com',
-    isScheduled: true,
-    scheduleTimeSlots: [
-      { start: '09:00', end: '12:00', weekdays: [1, 2, 3, 4, 5] },
-      { start: '13:00', end: '18:00', weekdays: [1, 2, 3, 4, 5] }
-    ],
-    isEnabled: true
-  },
-  {
-    id: 3,
-    url: 'https://stackoverflow.com',
-    isScheduled: true,
-    scheduleTimeSlots: [
-      { start: '08:00', end: '17:00', weekdays: [1, 2, 3, 4, 5] }
-    ],
-    isEnabled: false
-  },
-  {
-    id: 4,
-    url: 'https://developer.mozilla.org',
-    isScheduled: false,
-    scheduleTimeSlots: [],
-    isEnabled: true
-  },
-  {
-    id: 5,
-    url: 'https://www.youtube.com',
-    isScheduled: true,
-    scheduleTimeSlots: [
-      { start: '12:00', end: '13:00', weekdays: [1, 2, 3, 4, 5] },
-      { start: '18:00', end: '20:00', weekdays: [6, 0] },
-      { start: '21:00', end: '22:00', weekdays: [0] }
-    ],
-    isEnabled: true
-  },
-  {
-    id: 6,
-    url: 'https://www.wikipedia.org',
-    isScheduled: true,
-    scheduleTimeSlots: [
-      { start: '00:00', end: '23:59', weekdays: [0, 1, 2, 3, 4, 5, 6] }
-    ],
-    isEnabled: true
-  }
-];
+import ConfirmModal from './ConfirmModal';
 
 const WEEKDAYS = [
   { id: 1, label: '一' },
@@ -69,13 +13,23 @@ const WEEKDAYS = [
   { id: 0, label: '日' }
 ];
 
-const WhiteListView = () => {
+const WhiteListView = ({ records, onAddRecord, onDeleteRecord, onToggleRecord, onUpdateTimeSlots }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [newUrl, setNewUrl] = useState('');
   const [isScheduled, setIsScheduled] = useState(false);
   const [timeSlots, setTimeSlots] = useState([]);
-  const [records, setRecords] = useState(mockWhiteListData);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Edit modal state
+  const [editingRecord, setEditingRecord] = useState(null);
+  const [editTimeSlots, setEditTimeSlots] = useState([]);
+  const [editIsScheduled, setEditIsScheduled] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  // Delete confirmation modal state
+  const [recordToDelete, setRecordToDelete] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   // Format weekdays for display
   const formatWeekdays = (weekdayIds) => {
@@ -90,41 +44,112 @@ const WhiteListView = () => {
   );
 
   const handleCreateToggle = () => {
+    if (!isCreating) {
+      // Opening the form - copy search term to URL input if it exists
+      if (searchTerm.trim()) {
+        setNewUrl(searchTerm.trim());
+      }
+    } else {
+      // Closing the form - reset everything
+      setNewUrl('');
+      setIsScheduled(false);
+      setTimeSlots([]);
+    }
     setIsCreating(!isCreating);
-    if (isCreating) {
-      // Reset form when closing
-      setNewUrl('');
-      setIsScheduled(false);
-      setTimeSlots([]);
-    }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (newUrl.trim()) {
-      const newRecord = {
-        id: records.length + 1,
-        url: newUrl.trim(),
-        isScheduled: isScheduled,
-        scheduleTimeSlots: isScheduled ? timeSlots : [],
-        isEnabled: true
-      };
-      setRecords([...records, newRecord]);
-      setNewUrl('');
-      setIsScheduled(false);
-      setTimeSlots([]);
-      setIsCreating(false);
+    if (newUrl.trim() && !isSubmitting) {
+      // Validate URL format
+      let urlToSubmit = newUrl.trim();
+
+      // Ensure URL has protocol (required by backend)
+      if (!urlToSubmit.startsWith('http://') && !urlToSubmit.startsWith('https://')) {
+        urlToSubmit = 'https://' + urlToSubmit;
+      }
+
+      setIsSubmitting(true);
+      try {
+        const newRecord = {
+          url: urlToSubmit,
+          type: 'white',
+          isScheduled: isScheduled,
+          scheduleTimeSlots: isScheduled ? timeSlots : [],
+          isEnabled: true
+        };
+        await onAddRecord(newRecord);
+        setNewUrl('');
+        setIsScheduled(false);
+        setTimeSlots([]);
+        setIsCreating(false);
+      } catch (error) {
+        console.error('Failed to add record:', error);
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
-  const handleDelete = (id) => {
-    setRecords(records.filter(record => record.id !== id));
+  const handleDeleteClick = (record) => {
+    setRecordToDelete(record);
+    setShowDeleteModal(true);
   };
 
-  const handleToggleEnable = (id) => {
-    setRecords(records.map(record =>
-      record.id === id ? { ...record, isEnabled: !record.isEnabled } : record
-    ));
+  const handleDeleteConfirm = async () => {
+    if (!recordToDelete) return;
+
+    try {
+      await onDeleteRecord(recordToDelete.id);
+      setShowDeleteModal(false);
+      setRecordToDelete(null);
+    } catch (error) {
+      console.error('Failed to delete record:', error);
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setShowDeleteModal(false);
+    setRecordToDelete(null);
+  };
+
+  const handleToggleEnable = async (id) => {
+    try {
+      await onToggleRecord(id);
+    } catch (error) {
+      console.error('Failed to toggle record:', error);
+    }
+  };
+
+  const handleEditClick = (record) => {
+    setEditingRecord(record);
+    setEditIsScheduled(record.isScheduled);
+    setEditTimeSlots(record.scheduleTimeSlots || []);
+  };
+
+  const handleEditCancel = () => {
+    setEditingRecord(null);
+    setEditTimeSlots([]);
+    setEditIsScheduled(false);
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    if (!editingRecord || isUpdating) return;
+
+    setIsUpdating(true);
+    try {
+      await onUpdateTimeSlots(
+        editingRecord.id,
+        editIsScheduled ? editTimeSlots : [],
+        editingRecord.isEnabled
+      );
+      handleEditCancel();
+    } catch (error) {
+      console.error('Failed to update record:', error);
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   return (
@@ -185,7 +210,7 @@ const WhiteListView = () => {
               <input
                 id="url"
                 type="text"
-                placeholder="https://example.com"
+                placeholder="example.com 或 https://example.com"
                 value={newUrl}
                 onChange={(e) => setNewUrl(e.target.value)}
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg
@@ -193,6 +218,9 @@ const WhiteListView = () => {
                   transition-all duration-200 text-sm sm:text-base"
                 required
               />
+              <p className="text-xs text-gray-500 mt-1">
+                提示: 可輸入域名 (如 google.com) 或完整網址，系統會自動加上 https://
+              </p>
             </div>
 
             {/* Schedule Checkbox */}
@@ -228,13 +256,15 @@ const WhiteListView = () => {
             {/* Submit Button */}
             <button
               type="submit"
+              disabled={isSubmitting}
               className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 px-4 rounded-lg
                 font-semibold hover:from-green-600 hover:to-emerald-700
                 focus:outline-none focus:ring-4 focus:ring-green-300
                 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98]
-                shadow-lg hover:shadow-xl"
+                shadow-lg hover:shadow-xl
+                disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
             >
-              確認新增
+              {isSubmitting ? '新增中...' : '確認新增'}
             </button>
           </form>
           </div>
@@ -383,6 +413,7 @@ const WhiteListView = () => {
                         </button>
                         <button
                           type="button"
+                          onClick={() => handleEditClick(record)}
                           className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors duration-200"
                           title="編輯"
                         >
@@ -390,7 +421,7 @@ const WhiteListView = () => {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDelete(record.id)}
+                          onClick={() => handleDeleteClick(record)}
                           className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
                           title="刪除"
                         >
@@ -405,6 +436,102 @@ const WhiteListView = () => {
           )}
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showDeleteModal}
+        onClose={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
+        title="確認刪除"
+        message={`確定要刪除白名單記錄「${recordToDelete?.url}」嗎？此操作無法復原。`}
+        confirmText="確認刪除"
+        cancelText="取消"
+      />
+
+      {/* Edit Modal */}
+      {editingRecord && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fadeIn">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-scaleIn">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white p-6 rounded-t-xl">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-bold flex items-center gap-2">
+                    <Edit className="w-6 h-6" />
+                    編輯白名單記錄
+                  </h3>
+                  <p className="text-white/90 text-sm mt-1">{editingRecord.url}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleEditCancel}
+                  className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <form onSubmit={handleEditSubmit} className="p-6 space-y-6">
+              {/* Schedule Checkbox */}
+              <div className="flex items-center gap-3 p-4 bg-green-50 rounded-lg border-2 border-green-100">
+                <input
+                  id="edit-schedule"
+                  type="checkbox"
+                  checked={editIsScheduled}
+                  onChange={(e) => setEditIsScheduled(e.target.checked)}
+                  className="w-5 h-5 text-green-600 border-gray-300 rounded focus:ring-green-500 focus:ring-2 cursor-pointer"
+                />
+                <label htmlFor="edit-schedule" className="flex items-center gap-2 cursor-pointer select-none">
+                  <Calendar className="w-5 h-5 text-green-600" />
+                  <span className="text-sm font-medium text-gray-700">
+                    排程白名單 (Schedule Whitelist)
+                  </span>
+                </label>
+              </div>
+
+              {/* Time Slot Picker */}
+              <div
+                className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                  editIsScheduled ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'
+                }`}
+              >
+                {editIsScheduled && (
+                  <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border-2 border-blue-200">
+                    <TimeSlotPicker timeSlots={editTimeSlots} onChange={setEditTimeSlots} />
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={handleEditCancel}
+                  className="flex-1 px-4 py-3 border-2 border-gray-300 text-gray-700 rounded-lg font-semibold
+                    hover:bg-gray-50 focus:outline-none focus:ring-4 focus:ring-gray-200
+                    transition-all duration-200"
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdating}
+                  className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 px-4 rounded-lg
+                    font-semibold hover:from-green-600 hover:to-emerald-700
+                    focus:outline-none focus:ring-4 focus:ring-green-300
+                    transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98]
+                    shadow-lg hover:shadow-xl
+                    disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                >
+                  {isUpdating ? '更新中...' : '確認更新'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -2,6 +2,62 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  /* iOS-style scrollbar for webkit browsers (Chrome, Safari, Edge) */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 10px;
+    transition: background 0.2s ease;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.3);
+  }
+
+  ::-webkit-scrollbar-thumb:active {
+    background: rgba(0, 0, 0, 0.4);
+  }
+
+  /* iOS-style scrollbar for Firefox */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+  }
+
+  /* Dark mode support */
+  @media (prefers-color-scheme: dark) {
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    ::-webkit-scrollbar-thumb:active {
+      background: rgba(255, 255, 255, 0.4);
+    }
+
+    * {
+      scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+    }
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
 @layer utilities {
   /* Fade in animation */
   @keyframes fadeIn {

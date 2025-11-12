@@ -80,6 +80,9 @@ const Dashboard = ({ mode, activeRules = [], inactiveRules = [] }) => {
             )}
           </div>
           <div className="flex-1">
+            <p className="text-white/80 text-xs font-medium uppercase tracking-wider mb-1">
+              當前模式
+            </p>
             <h2 className="text-2xl font-bold mb-1">
               {mode === 'whitelist' ? '白名單模式' : '黑名單模式'}
             </h2>
