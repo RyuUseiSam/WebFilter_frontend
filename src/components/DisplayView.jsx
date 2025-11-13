@@ -7,6 +7,7 @@ const DisplayView = ({
   whiteListRecords,
   blackListRecords,
   onAddRecord,
+  onAddRecordBatch,
   onDeleteRecord,
   onToggleRecord,
   onUpdateTimeSlots,
@@ -18,6 +19,7 @@ const DisplayView = ({
         <WhiteListView
           records={whiteListRecords}
           onAddRecord={onAddRecord}
+          onAddRecordBatch={onAddRecordBatch}
           onDeleteRecord={onDeleteRecord}
           onToggleRecord={onToggleRecord}
           onUpdateTimeSlots={onUpdateTimeSlots}
@@ -32,6 +34,7 @@ const DisplayView = ({
       <BlackListView
         records={blackListRecords}
         onAddRecord={onAddRecord}
+        onAddRecordBatch={onAddRecordBatch}
         onDeleteRecord={onDeleteRecord}
         onToggleRecord={onToggleRecord}
         onUpdateTimeSlots={onUpdateTimeSlots}

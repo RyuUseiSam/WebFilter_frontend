@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Plus, X, Trash2, Edit, Calendar, Clock, XCircle, CheckCircle, Power } from 'lucide-react';
+import { Search, Plus, X, Trash2, Edit, Calendar, Clock, XCircle, CheckCircle, Power, List, FileText } from 'lucide-react';
 import TimeSlotPicker from './TimeSlotPicker';
 import ConfirmModal from './ConfirmModal';
 
@@ -13,10 +13,12 @@ const WEEKDAYS = [
   { id: 0, label: '日' }
 ];
 
-const BlackListView = ({ records, onAddRecord, onDeleteRecord, onToggleRecord, onUpdateTimeSlots }) => {
+const BlackListView = ({ records, onAddRecord, onAddRecordBatch, onDeleteRecord, onToggleRecord, onUpdateTimeSlots }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [inputMode, setInputMode] = useState('single'); // 'single' or 'batch'
   const [newUrl, setNewUrl] = useState('');
+  const [batchUrls, setBatchUrls] = useState('');
   const [isScheduled, setIsScheduled] = useState(false);
   const [timeSlots, setTimeSlots] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -52,42 +54,96 @@ const BlackListView = ({ records, onAddRecord, onDeleteRecord, onToggleRecord, o
     } else {
       // Closing the form - reset everything
       setNewUrl('');
+      setBatchUrls('');
+      setInputMode('single');
       setIsScheduled(false);
       setTimeSlots([]);
     }
     setIsCreating(!isCreating);
   };
 
+  const handleInputModeToggle = (mode) => {
+    setInputMode(mode);
+    // Clear the other input when switching modes
+    if (mode === 'single') {
+      setBatchUrls('');
+    } else {
+      setNewUrl('');
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (newUrl.trim() && !isSubmitting) {
-      // Validate URL format
-      let urlToSubmit = newUrl.trim();
 
-      // Ensure URL has protocol (required by backend)
-      if (!urlToSubmit.startsWith('http://') && !urlToSubmit.startsWith('https://')) {
-        urlToSubmit = 'https://' + urlToSubmit;
-      }
+    if (isSubmitting) return;
 
-      setIsSubmitting(true);
-      try {
-        const newRecord = {
-          url: urlToSubmit,
-          type: 'black',
-          isScheduled: isScheduled,
-          scheduleTimeSlots: isScheduled ? timeSlots : [],
-          isEnabled: true
-        };
-        await onAddRecord(newRecord);
-        setNewUrl('');
-        setIsScheduled(false);
-        setTimeSlots([]);
-        setIsCreating(false);
-      } catch (error) {
-        console.error('Failed to add record:', error);
-      } finally {
-        setIsSubmitting(false);
+    setIsSubmitting(true);
+    try {
+      if (inputMode === 'single') {
+        // Single URL submission
+        if (newUrl.trim()) {
+          // Validate URL format
+          let urlToSubmit = newUrl.trim();
+
+          // Ensure URL has protocol (required by backend)
+          if (!urlToSubmit.startsWith('http://') && !urlToSubmit.startsWith('https://')) {
+            urlToSubmit = 'https://' + urlToSubmit;
+          }
+
+          const newRecord = {
+            url: urlToSubmit,
+            type: 'black',
+            isScheduled: isScheduled,
+            scheduleTimeSlots: isScheduled ? timeSlots : [],
+            isEnabled: true
+          };
+          await onAddRecord(newRecord);
+          setNewUrl('');
+          setIsScheduled(false);
+          setTimeSlots([]);
+          setIsCreating(false);
+        }
+      } else {
+        // Batch URL submission
+        if (batchUrls.trim()) {
+          // Parse batch input - split by newline or comma
+          const urls = batchUrls
+            .split(/[\n,]+/)
+            .map(url => url.trim())
+            .filter(url => url.length > 0);
+
+          if (urls.length === 0) {
+            return;
+          }
+
+          // Process URLs and ensure they have protocol
+          const processedUrls = urls.map(url => {
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+              return 'https://' + url;
+            }
+            return url;
+          });
+
+          // Create batch records
+          const batchRecords = processedUrls.map(url => ({
+            url: url,
+            type: 'black',
+            isScheduled: isScheduled,
+            scheduleTimeSlots: isScheduled ? timeSlots : [],
+            isEnabled: true
+          }));
+
+          await onAddRecordBatch(batchRecords);
+          setBatchUrls('');
+          setIsScheduled(false);
+          setTimeSlots([]);
+          setIsCreating(false);
+        }
       }
+    } catch (error) {
+      console.error('Failed to add record:', error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -202,26 +258,79 @@ const BlackListView = ({ records, onAddRecord, onDeleteRecord, onToggleRecord, o
         {isCreating && (
           <div className="mt-6 animate-fadeIn">
           <form onSubmit={handleSubmit} className="space-y-4 pt-4 border-t border-gray-200">
-            {/* URL Input */}
-            <div className="space-y-2">
-              <label htmlFor="url" className="block text-sm font-semibold text-gray-700">
-                網址 (URL)
-              </label>
-              <input
-                id="url"
-                type="text"
-                placeholder="example.com 或 https://example.com"
-                value={newUrl}
-                onChange={(e) => setNewUrl(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg
-                  focus:outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100
-                  transition-all duration-200 text-sm sm:text-base"
-                required
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                提示: 可輸入域名 (如 facebook.com) 或完整網址，系統會自動加上 https://
-              </p>
+            {/* Input Mode Toggle */}
+            <div className="flex gap-2 p-1 bg-gray-100 rounded-lg w-fit">
+              <button
+                type="button"
+                onClick={() => handleInputModeToggle('single')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-all duration-200 ${
+                  inputMode === 'single'
+                    ? 'bg-white text-red-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <FileText className="w-4 h-4" />
+                單筆輸入
+              </button>
+              <button
+                type="button"
+                onClick={() => handleInputModeToggle('batch')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-all duration-200 ${
+                  inputMode === 'batch'
+                    ? 'bg-white text-red-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <List className="w-4 h-4" />
+                批次輸入
+              </button>
             </div>
+
+            {/* Single URL Input */}
+            {inputMode === 'single' && (
+              <div className="space-y-2">
+                <label htmlFor="url" className="block text-sm font-semibold text-gray-700">
+                  網址 (URL)
+                </label>
+                <input
+                  id="url"
+                  type="text"
+                  placeholder="example.com 或 https://example.com"
+                  value={newUrl}
+                  onChange={(e) => setNewUrl(e.target.value)}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg
+                    focus:outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100
+                    transition-all duration-200 text-sm sm:text-base"
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  提示: 可輸入域名 (如 facebook.com) 或完整網址，系統會自動加上 https://
+                </p>
+              </div>
+            )}
+
+            {/* Batch URLs Input */}
+            {inputMode === 'batch' && (
+              <div className="space-y-2">
+                <label htmlFor="batch-urls" className="block text-sm font-semibold text-gray-700">
+                  批次網址 (Batch URLs)
+                </label>
+                <textarea
+                  id="batch-urls"
+                  placeholder="輸入多個網址，使用換行或逗號分隔&#10;例如:&#10;facebook.com&#10;instagram.com&#10;或&#10;facebook.com, instagram.com, tiktok.com"
+                  value={batchUrls}
+                  onChange={(e) => setBatchUrls(e.target.value)}
+                  rows={6}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg
+                    focus:outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100
+                    transition-all duration-200 text-sm sm:text-base resize-y"
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  提示: 每行一個網址或使用逗號分隔，系統會自動加上 https://
+                </p>
+              </div>
+            )}
 
             {/* Schedule Checkbox */}
             <div className="flex items-center gap-3 p-4 bg-red-50 rounded-lg border-2 border-red-100">
@@ -264,7 +373,9 @@ const BlackListView = ({ records, onAddRecord, onDeleteRecord, onToggleRecord, o
                 shadow-lg hover:shadow-xl
                 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
             >
-              {isSubmitting ? '新增中...' : '確認新增'}
+              {isSubmitting
+                ? (inputMode === 'batch' ? '批次新增中...' : '新增中...')
+                : (inputMode === 'batch' ? '確認批次新增' : '確認新增')}
             </button>
           </form>
           </div>

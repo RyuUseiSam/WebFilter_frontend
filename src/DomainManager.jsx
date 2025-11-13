@@ -293,6 +293,54 @@ const DomainManager = () => {
     }
   };
 
+  // Add multiple domain records in batch
+  const handleAddRecordBatch = async (recordsData) => {
+    try {
+      const backendDataArray = recordsData.map(convertFrontendToBackend);
+      const response = await makeRequest("/addRecordBatch", {
+        method: "POST",
+        body: JSON.stringify({ domains: backendDataArray }),
+      });
+
+      // API returns added_domains array (can be empty if all duplicates)
+      const addedDomains = response.data.added_domains || [];
+      const newRecords = addedDomains.map(convertBackendToFrontend);
+      setRecords([...records, ...newRecords]);
+
+      // Construct message based on batch results
+      const { added_count = 0, skipped_count = 0, failed_count = 0 } = response.data;
+      let message = '';
+      if (added_count > 0) {
+        message = `成功批次新增 ${added_count} 筆域名記錄！`;
+      }
+      if (skipped_count > 0) {
+        message += (message ? ' ' : '') + `${skipped_count} 筆重複已跳過`;
+      }
+      if (failed_count > 0) {
+        message += (message ? ' ' : '') + `${failed_count} 筆失敗`;
+      }
+      if (!message) {
+        message = '批次操作完成';
+      }
+
+      setToast({
+        message,
+        type: added_count > 0 ? "success" : "info",
+      });
+
+      // Refresh dashboard stats
+      await fetchDashboard();
+
+      return newRecords;
+    } catch (error) {
+      setToast({
+        message: `批次新增記錄失敗：${error.message}`,
+        type: "error",
+      });
+      throw error;
+    }
+  };
+
   // Delete domain record
   const handleDeleteRecord = async (id) => {
     try {
@@ -497,6 +545,7 @@ const DomainManager = () => {
                 whiteListRecords={whiteListRecords}
                 blackListRecords={blackListRecords}
                 onAddRecord={handleAddRecord}
+                onAddRecordBatch={handleAddRecordBatch}
                 onDeleteRecord={handleDeleteRecord}
                 onToggleRecord={handleToggleRecord}
                 onUpdateTimeSlots={handleUpdateTimeSlots}
