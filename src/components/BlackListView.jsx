@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Search, Plus, X, Trash2, Edit, Calendar, Clock, XCircle, CheckCircle, Power, List, FileText } from 'lucide-react';
 import TimeSlotPicker from './TimeSlotPicker';
 import ConfirmModal from './ConfirmModal';
+import Pagination from './Pagination';
 
 const WEEKDAYS = [
   { id: 1, label: '一' },
@@ -13,8 +14,19 @@ const WEEKDAYS = [
   { id: 0, label: '日' }
 ];
 
-const BlackListView = ({ records, onAddRecord, onAddRecordBatch, onDeleteRecord, onToggleRecord, onUpdateTimeSlots }) => {
-  const [searchTerm, setSearchTerm] = useState('');
+const BlackListView = ({
+  records,
+  onAddRecord,
+  onAddRecordBatch,
+  onDeleteRecord,
+  onToggleRecord,
+  onUpdateTimeSlots,
+  searchTerm,
+  onSearchChange,
+  paginationData,
+  onPageChange,
+  onPageSizeChange
+}) => {
   const [isCreating, setIsCreating] = useState(false);
   const [inputMode, setInputMode] = useState('single'); // 'single' or 'batch'
   const [newUrl, setNewUrl] = useState('');
@@ -39,11 +51,6 @@ const BlackListView = ({ records, onAddRecord, onAddRecordBatch, onDeleteRecord,
       .map(id => WEEKDAYS.find(day => day.id === id)?.label)
       .join(',');
   };
-
-  // Filter records based on search term
-  const filteredRecords = records.filter(record =>
-    record.url.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   const handleCreateToggle = () => {
     if (!isCreating) {
@@ -220,7 +227,7 @@ const BlackListView = ({ records, onAddRecord, onAddRecordBatch, onDeleteRecord,
               type="text"
               placeholder="搜尋 URL..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => onSearchChange(e.target.value)}
               className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-lg
                 focus:outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100
                 transition-all duration-200 text-sm sm:text-base
@@ -390,14 +397,14 @@ const BlackListView = ({ records, onAddRecord, onAddRecordBatch, onDeleteRecord,
             <XCircle className="w-5 h-5" />
             黑名單記錄
             <span className="ml-2 px-3 py-1 bg-white/20 rounded-full text-sm">
-              {filteredRecords.length} 筆
+              {paginationData.total} 筆
             </span>
           </h3>
         </div>
 
         {/* Table Content */}
         <div className="overflow-x-auto">
-          {filteredRecords.length === 0 ? (
+          {records.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 px-4">
               <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
                 <Search className="w-10 h-10 text-gray-400" />
@@ -428,7 +435,7 @@ const BlackListView = ({ records, onAddRecord, onAddRecordBatch, onDeleteRecord,
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {filteredRecords.map((record, index) => (
+                {records.map((record, index) => (
                   <tr
                     key={record.id}
                     className={`hover:bg-red-50 transition-all duration-150 animate-fadeIn ${
@@ -546,6 +553,19 @@ const BlackListView = ({ records, onAddRecord, onAddRecordBatch, onDeleteRecord,
             </table>
           )}
         </div>
+
+        {/* Pagination */}
+        <Pagination
+          currentPage={paginationData.page}
+          totalPages={paginationData.total_pages}
+          pageSize={paginationData.page_size}
+          total={paginationData.total}
+          hasNext={paginationData.has_next}
+          hasPrev={paginationData.has_prev}
+          onPageChange={onPageChange}
+          onPageSizeChange={onPageSizeChange}
+          mode="blacklist"
+        />
       </div>
 
       {/* Delete Confirmation Modal */}

@@ -1,11 +1,29 @@
 import React from 'react';
-import { Shield, ShieldAlert, CheckCircle, XCircle, Calendar, Activity, TrendingUp } from 'lucide-react';
+import { Shield, ShieldAlert, ShieldOff, CheckCircle, XCircle, Calendar, Activity, TrendingUp, AlertTriangle } from 'lucide-react';
 
-const Dashboard = ({ mode, activeRules = [], inactiveRules = [] }) => {
-  // Calculate statistics
-  const totalRules = activeRules.length + inactiveRules.length;
-  const scheduledRules = [...activeRules, ...inactiveRules].filter(rule => rule.isScheduled).length;
-  const permanentRules = [...activeRules, ...inactiveRules].filter(rule => !rule.isScheduled).length;
+const Dashboard = ({ mode, dashboardStats }) => {
+  // Extract statistics from dashboard API data based on current mode
+  // dashboardStats contains: { mode, blackList: {...}, whiteList: {...}, totalCount }
+  const getModeStats = () => {
+    if (!dashboardStats) {
+      return { total: 0, active: 0, inactive: 0, scheduled: 0 };
+    }
+
+    if (mode === 'whitelist') {
+      return dashboardStats.whiteList || { total: 0, active: 0, inactive: 0, scheduled: 0 };
+    } else if (mode === 'blacklist') {
+      return dashboardStats.blackList || { total: 0, active: 0, inactive: 0, scheduled: 0 };
+    } else {
+      // Bypass mode - return zeros
+      return { total: 0, active: 0, inactive: 0, scheduled: 0 };
+    }
+  };
+
+  const stats = getModeStats();
+  const totalRules = stats.total;
+  const activeRules = stats.active;
+  const inactiveRules = stats.inactive;
+  const scheduledRules = stats.scheduled;
 
   // Color schemes based on mode
   const modeColors = {
@@ -22,12 +40,19 @@ const Dashboard = ({ mode, activeRules = [], inactiveRules = [] }) => {
       border: 'border-red-200',
       text: 'text-red-700',
       icon: 'text-red-600'
+    },
+    bypass: {
+      gradient: 'from-orange-500 to-amber-600',
+      bg: 'bg-orange-50',
+      border: 'border-orange-200',
+      text: 'text-orange-700',
+      icon: 'text-orange-600'
     }
   };
 
   const colors = modeColors[mode] || modeColors.whitelist;
 
-  // Stats cards data
+  // Stats cards data using values from /dashboard API
   const statsCards = [
     {
       title: '總規則數',
@@ -40,7 +65,7 @@ const Dashboard = ({ mode, activeRules = [], inactiveRules = [] }) => {
     },
     {
       title: '啟用規則',
-      value: activeRules.length,
+      value: activeRules,
       icon: CheckCircle,
       gradient: 'from-green-500 to-emerald-600',
       bgColor: 'bg-green-50',
@@ -49,7 +74,7 @@ const Dashboard = ({ mode, activeRules = [], inactiveRules = [] }) => {
     },
     {
       title: '停用規則',
-      value: inactiveRules.length,
+      value: inactiveRules,
       icon: XCircle,
       gradient: 'from-gray-500 to-slate-600',
       bgColor: 'bg-gray-50',
@@ -75,8 +100,10 @@ const Dashboard = ({ mode, activeRules = [], inactiveRules = [] }) => {
           <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
             {mode === 'whitelist' ? (
               <Shield className="w-8 h-8" />
-            ) : (
+            ) : mode === 'blacklist' ? (
               <ShieldAlert className="w-8 h-8" />
+            ) : (
+              <ShieldOff className="w-8 h-8" />
             )}
           </div>
           <div className="flex-1">
@@ -84,17 +111,28 @@ const Dashboard = ({ mode, activeRules = [], inactiveRules = [] }) => {
               當前模式
             </p>
             <h2 className="text-2xl font-bold mb-1">
-              {mode === 'whitelist' ? '白名單模式' : '黑名單模式'}
+              {mode === 'whitelist' ? '白名單模式' : mode === 'blacklist' ? '黑名單模式' : '不過濾模式'}
             </h2>
             <p className="text-white/90 text-sm">
               {mode === 'whitelist'
                 ? '僅允許列表中的域名訪問，其他域名將被阻擋。'
-                : '阻擋列表中的域名訪問，其他域名正常通行。'}
+                : mode === 'blacklist'
+                ? '阻擋列表中的域名訪問，其他域名正常通行。'
+                : '所有過濾功能已停用，DNS 查詢將直接轉發至上游伺服器，無任何限制。'}
             </p>
           </div>
           <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-white/20 rounded-lg backdrop-blur-sm">
-            <TrendingUp className="w-5 h-5" />
-            <span className="font-semibold">運行中</span>
+            {mode === 'bypass' ? (
+              <>
+                <AlertTriangle className="w-5 h-5" />
+                <span className="font-semibold">未過濾</span>
+              </>
+            ) : (
+              <>
+                <TrendingUp className="w-5 h-5" />
+                <span className="font-semibold">運行中</span>
+              </>
+            )}
           </div>
         </div>
       </div>

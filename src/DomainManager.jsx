@@ -22,6 +22,19 @@ const DomainManager = () => {
   const [dashboardStats, setDashboardStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [paginationData, setPaginationData] = useState({
+    total: 0,
+    page: 1,
+    page_size: 10,
+    total_pages: 0,
+    has_next: false,
+    has_prev: false
+  });
+
   // Helper function to make API requests
   const makeRequest = async (endpoint, options = {}) => {
     const token = localStorage.getItem("token");
@@ -138,12 +151,46 @@ const DomainManager = () => {
     }
   };
 
-  // Fetch all domain records
-  const fetchRecords = async () => {
+  // Fetch all domain records with pagination
+  const fetchRecords = async (page = currentPage, size = pageSize, search = searchTerm, fetchMode = null) => {
     try {
-      const response = await makeRequest("/getRecord");
+      // Determine which mode to use for fetching
+      // Use provided fetchMode, or fall back to current mode selection
+      const modeToFetch = fetchMode || mode;
+
+      // If bypass mode, skip fetching since rules aren't applied
+      if (modeToFetch === 'bypass') {
+        setRecords([]);
+        setPaginationData({
+          total: 0,
+          page: 1,
+          page_size: size,
+          total_pages: 0,
+          has_next: false,
+          has_prev: false
+        });
+        return [];
+      }
+
+      // Build query parameters - mode is REQUIRED by backend
+      const params = new URLSearchParams({
+        mode: modeToFetch, // Required: 'blacklist' or 'whitelist'
+        page: page.toString(),
+        page_size: size.toString(),
+      });
+
+      // Add search parameter if provided
+      if (search && search.trim()) {
+        params.append('search', search.trim());
+      }
+
+      const response = await makeRequest(`/getRecord?${params.toString()}`);
       const convertedRecords = response.data.domains.map(convertBackendToFrontend);
       setRecords(convertedRecords);
+
+      // Update pagination metadata
+      setPaginationData(response.data.pagination);
+
       return convertedRecords;
     } catch (error) {
       setToast({
@@ -174,13 +221,15 @@ const DomainManager = () => {
       try {
         // Fetch dashboard data to get current mode
         const dashData = await fetchDashboard();
+        let currentMode = 'blacklist'; // Default mode
         if (dashData && dashData.mode) {
-          setMode(dashData.mode);
-          setSavedMode(dashData.mode); // Set both mode and savedMode on initial load
+          currentMode = dashData.mode;
+          setMode(currentMode);
+          setSavedMode(currentMode); // Set both mode and savedMode on initial load
         }
 
-        // Fetch all records
-        await fetchRecords();
+        // Fetch all records with the current mode
+        await fetchRecords(1, pageSize, '', currentMode);
 
         // Fetch room name
         await fetchRoomName();
@@ -228,8 +277,13 @@ const DomainManager = () => {
   };
 
 
-  const handleModeChange = (newMode) => {
+  const handleModeChange = async (newMode) => {
     setMode(newMode);
+    // Immediately fetch records for the newly selected mode
+    // Reset to page 1 and clear search when switching modes
+    setCurrentPage(1);
+    setSearchTerm('');
+    await fetchRecords(1, pageSize, '', newMode);
   };
 
   const handleSaveMode = async () => {
@@ -245,14 +299,17 @@ const DomainManager = () => {
       // Update saved mode to match current mode
       setSavedMode(mode);
 
+      const modeText = mode === 'whitelist' ? '白名單' : mode === 'blacklist' ? '黑名單' : '不過濾';
       setToast({
-        message: `成功儲存${mode === 'whitelist' ? '白名單' : '黑名單'}模式！`,
+        message: `成功儲存${modeText}模式！`,
         type: 'success'
       });
 
-      // Refresh dashboard stats and records after mode change
+      // Refresh dashboard stats after mode change
       await fetchDashboard();
-      await fetchRecords();
+      // Note: Records are already fetched when mode was selected in handleModeChange
+      // But we refetch here to ensure we have the latest data after backend sync
+      await fetchRecords(1, pageSize, '', mode);
     } catch (error) {
       setToast({
         message: `儲存模式失敗：${error.message}`,
@@ -439,7 +496,27 @@ const DomainManager = () => {
     }
   };
 
+  // Pagination handlers
+  const handlePageChange = (newPage) => {
+    setCurrentPage(newPage);
+    fetchRecords(newPage, pageSize, searchTerm);
+  };
+
+  const handlePageSizeChange = (newSize) => {
+    setPageSize(newSize);
+    setCurrentPage(1); // Reset to first page when changing page size
+    fetchRecords(1, newSize, searchTerm);
+  };
+
+  const handleSearchChange = (search) => {
+    setSearchTerm(search);
+    setCurrentPage(1); // Reset to first page when searching
+    fetchRecords(1, pageSize, search);
+  };
+
   // Filter records by type
+  // Note: Backend already filters by mode, so one of these arrays will be populated
+  // and the other will be empty based on current mode selection
   const whiteListRecords = records.filter(r => r.type === 'white');
   const blackListRecords = records.filter(r => r.type === 'black');
 
@@ -514,8 +591,7 @@ const DomainManager = () => {
               {/* Dashboard Component */}
               <Dashboard
                 mode={savedMode}
-                activeRules={(savedMode === 'whitelist' ? whiteListRecords : blackListRecords).filter(rule => rule.isEnabled)}
-                inactiveRules={(savedMode === 'whitelist' ? whiteListRecords : blackListRecords).filter(rule => !rule.isEnabled)}
+                dashboardStats={dashboardStats}
               />
             </section>
 
@@ -549,6 +625,11 @@ const DomainManager = () => {
                 onDeleteRecord={handleDeleteRecord}
                 onToggleRecord={handleToggleRecord}
                 onUpdateTimeSlots={handleUpdateTimeSlots}
+                searchTerm={searchTerm}
+                onSearchChange={handleSearchChange}
+                paginationData={paginationData}
+                onPageChange={handlePageChange}
+                onPageSizeChange={handlePageSizeChange}
               />
             </section>
           </>
